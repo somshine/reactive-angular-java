@@ -1,0 +1,7 @@
+<p>request-channel works!</p>
+
+<input [(ngModel)]="inputValue" name="inputValue" id="inputValue" (input)="onSearchChange($event.target.value)"/>
+
+<div class="row">
+    <ul class="list-group mt-5 pl-2"  id="result"></ul>
+</div>
