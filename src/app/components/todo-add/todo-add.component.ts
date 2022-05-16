@@ -1,18 +1,18 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Component, OnInit } from '@angular/core';
 import { IdentitySerializer, JsonSerializer, RSocketClient } from 'rsocket-core';
 import RSocketWebSocketClient from 'rsocket-websocket-client';
-import { Subject } from 'rxjs';
+import { fromEvent, Subject } from 'rxjs';
+import { Todo } from 'src/app/model/todo';
+import { TodoService } from 'src/app/services/todo.service';
 const { Single, FlowableProcessor } = require('rsocket-flowable');
 
-// https://www.vinsguru.com/rsocket-websocket-spring-boot/
-
 @Component({
-  selector: 'app-request-channel',
-  templateUrl: './request-channel.component.html',
-  styleUrls: ['./request-channel.component.css']
+  selector: 'app-todo-list',
+  templateUrl: './todo-add.component.html',
+  styleUrls: ['./todo-add.component.scss']
 })
-export class RequestChannelComponent implements OnInit, OnDestroy {
-
+export class TodoAddComponent implements OnInit {
   title = 'client';
   message = '';
   messages: any[];
@@ -22,11 +22,14 @@ export class RequestChannelComponent implements OnInit, OnDestroy {
   processorNotification = new FlowableProcessor(sub => { });
   inputValue: string;
 
-  constructor() { }
+  todos: Todo[] = [];
+
+  constructor(private todoService: TodoService, private http: HttpClient) { }
 
   ngOnInit(): void {
-    console.log("Loading the channel");
+    this.getTodoListing();
     // Create an instance of a client
+
     this.client = new RSocketClient({
       serializers: {
         data: JsonSerializer,
@@ -52,6 +55,7 @@ export class RequestChannelComponent implements OnInit, OnDestroy {
     // response handler
     const responseHandler = (payload) => {
       const li = document.createElement('li');
+      this.todos.push(payload.data);
       li.innerText = payload.data;
       li.classList.add('list-group-item', 'small')
       document.getElementById('result').appendChild(li);
@@ -59,47 +63,19 @@ export class RequestChannelComponent implements OnInit, OnDestroy {
 
     const handleNotificationResponse = (payload) => {
       const li = document.createElement('li');
-      li.innerText = payload.data.title;
+      li.innerText = payload.data;
       li.classList.add('list-group-item', 'small')
       document.getElementById('result').appendChild(li);
-    }
-
-    const numberRequester = (socket, value) => {
-      socket.requestStream({
-        data: value,
-        metadata: String.fromCharCode('number.stream'.length) + 'number.stream'
-      }).subscribe({
-        onError: errorHandler,
-        onNext: responseHandler,
-        onSubscribe: subscription => {
-          subscription.request(100); // set it to some max value
-        }
-      })
     }
 
     // reactive stream processor
     this.processor = new FlowableProcessor(sub => { });
 
-    const channelRequest = (socket, processor) => {
-      socket.requestChannel(processor.map(i => {
-        return {
-          data: i,
-          metadata: String.fromCharCode('number.channel'.length) + 'number.channel'
-        }
-      })).subscribe({
-        onError: errorHandler,
-        onNext: responseHandler,
-        onSubscribe: subscription => {
-          subscription.request(100); // set it to some max value
-        }
-      })
-    }
-
     const channelRequestNotification = (socket, processor) => {
       socket.requestChannel(processor.map(i => {
         return {
           data: i,
-          metadata: String.fromCharCode('test-channel'.length) + 'test-channel'
+          metadata: String.fromCharCode('my-channel'.length) + 'my-channel'
           // metadata: String.fromCharCode('saveTodo'.length) + 'saveTodo'
         }
       })).subscribe({
@@ -110,42 +86,18 @@ export class RequestChannelComponent implements OnInit, OnDestroy {
         }
       })
     }
-    // my-channel
 
     this.client.connect().then(sock => {
-      channelRequest(sock, this.processor);
-      this.processor.onNext(10);
-
+      //FOr notification refer the request-channel
       channelRequestNotification(sock, this.processorNotification);
-
-      //Notification Object
-      // this.processorNotification.onNext({
-      //   "source": "Angular JS",
-      //   "destination": "Spring boot reactive Java",
-      //   "text": "This is the best example of reactive programing with :: " + this.message
-      // });
-
       this.processorNotification.onNext({
         "title": "Test 8",
         "destination": "This is the best example of reactive programing with :: " + this.message,
-        "dueDate": "2022-05-15",
+        "dueDate": "12/05/2022",
         "isCompleted": true
       });
 
     }, errorHandler);
-  }
-
-  onSearchChange(searchValue: string): void {
-    console.log(searchValue);
-    if (searchValue.length > 0) {
-      this.processor.onNext(parseInt(searchValue));
-
-      this.processorNotification.onNext({
-        "source": "Angular JS",
-        "destination": "Spring boot reactive Java",
-        "text": "This is the best example of reactive programing with :: " + this.message
-      });
-    }
   }
 
   ngOnDestroy(): void {
@@ -154,4 +106,46 @@ export class RequestChannelComponent implements OnInit, OnDestroy {
       this.client.close();
     }
   }
+
+  ngAfterViewInit(): void {
+    //Event observable
+    fromEvent(document.getElementById("addNew")!, 'click').subscribe({
+      next: (data) => console.log(data),
+      error: (error) => console.log(error),
+      complete: () => console.log("Done with event based")
+    });
+  }
+
+  getTodoListing(): void {
+    // this.todoService.getTodoes().subscribe(todos => this.todos = todos);
+    this.todoService.getTodoes().subscribe({
+      next: (todos) => this.todos = todos,
+      error: (error) => console.log(error),
+      complete: () => console.log("Done with listing the todo items"),
+    });
+    // let todoListObservable$ = from(this.todos);
+  }
+
+  add(title: string, isCompleted: boolean): void {
+    // title = title.trim();
+    // if (!title) { return; }
+    // let date = new Date().toDateString();
+    // let description = title;
+    // this.todoService.addTodo({ title, description, date, isCompleted } as Todo)
+    //   .subscribe(hero => {
+    //     this.todos.push(hero);
+    //   });
+    this.processorNotification.onNext({
+      "title": "Test 8",
+      "destination": "This is the best example of reactive programing with :: " + this.message,
+      "dueDate": "12/05/2022",
+      "isCompleted": true
+    });
+  }
+
+  delete(hero: Todo): void {
+    this.todos = this.todos.filter(h => h !== hero);
+    this.todoService.deleteTodo(hero.id).subscribe();
+  }
+
 }
